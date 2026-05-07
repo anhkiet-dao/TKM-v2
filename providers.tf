@@ -19,11 +19,11 @@ terraform {
 
   # Remote state — thay đổi theo môi trường thực tế
   backend "s3" {
-    bucket         = "edubridge-terraform-state"
-    key            = "infrastructure/terraform.tfstate"
-    region         = "ap-southeast-1"
-    dynamodb_table = "terraform-state-lock"
-    encrypt        = true
+  bucket         = "edubridge-tfstate-147919947712"
+  key            = "infrastructure/terraform.tfstate"
+  region         = "ap-south-1"
+  dynamodb_table = "terraform-locks"
+  encrypt        = true
   }
 }
 
