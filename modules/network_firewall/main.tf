@@ -54,10 +54,6 @@ resource "aws_networkfirewall_rule_group" "stateful_suricata" {
         drop ip any any -> any any (msg:"Drop all other traffic"; sid:1000099; rev:1;)
       EOT
     }
-
-    stateful_rule_options {
-      capacity = 1000
-    }
   }
 
   tags = merge(var.tags, {

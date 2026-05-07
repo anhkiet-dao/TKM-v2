@@ -303,6 +303,9 @@ resource "aws_ecs_service" "this" {
   desired_count   = var.is_dr ? 0 : var.ecs_config.desired_count
   launch_type     = "FARGATE"
 
+  deployment_maximum_percent         = 200
+  deployment_minimum_healthy_percent = 100
+
   network_configuration {
     subnets          = var.private_subnet_ids
     security_groups  = [aws_security_group.ecs.id]
@@ -314,12 +317,7 @@ resource "aws_ecs_service" "this" {
     container_name   = "${var.project_name}-app"
     container_port   = var.ecs_config.container_port
   }
-
-  deployment_configuration {
-    maximum_percent         = 200
-    minimum_healthy_percent = 100
-  }
-
+  
   deployment_circuit_breaker {
     enable   = true
     rollback = true
