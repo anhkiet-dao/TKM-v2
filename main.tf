@@ -282,13 +282,17 @@ module "database_primary" {
   environment        = var.environment
   vpc_id             = module.vpc_prod_data.vpc_id
   private_subnet_ids = module.vpc_prod_data.private_subnet_ids
-  aurora_config      = var.aurora_config
-  redis_config       = var.redis_config
-  is_global_primary  = true
-  allowed_security_group_ids = [module.compute_primary.ecs_security_group_id]
-  tags               = local.common_tags
-}
 
+  rds_config = var.rds_config
+
+  redis_config = var.redis_config
+
+  allowed_security_group_ids = [
+    module.compute_primary.ecs_security_group_id
+  ]
+
+  tags = local.common_tags
+}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SHARED SERVICES — AD, Resolver, SSM, Jenkins
@@ -311,10 +315,12 @@ module "security" {
   source              = "./modules/security"
   project_name        = var.project_name
   environment         = var.environment
-  enable_guardduty    = var.enable_guardduty
-  enable_security_hub = var.enable_security_hub
+  # enable_guardduty    = var.enable_guardduty
+  # enable_security_hub = var.enable_security_hub
   s3_log_bucket_name  = var.s3_log_bucket_name
   tags                = local.common_tags
+  enable_guardduty    = false
+  enable_security_hub = false
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════

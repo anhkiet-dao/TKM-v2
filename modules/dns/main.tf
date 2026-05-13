@@ -47,6 +47,16 @@ variable "tags" {
   default = {}
 }
 
+variable "enable_cloudfront" {
+  type    = bool
+  default = false
+}
+
+variable "enable_alb" {
+  type    = bool
+  default = false
+}
+
 # ─── Public Hosted Zone ─────────────────────────────────────────────────────
 resource "aws_route53_zone" "public" {
   name    = var.domain_name
@@ -78,7 +88,7 @@ resource "aws_route53_zone" "private" {
 
 # Root domain → CloudFront
 resource "aws_route53_record" "root" {
-  count   = var.cloudfront_domain_name != "" ? 1 : 0
+  count = var.enable_cloudfront ? 1 : 0
   zone_id = aws_route53_zone.public.zone_id
   name    = var.domain_name
   type    = "A"
@@ -92,7 +102,7 @@ resource "aws_route53_record" "root" {
 
 # www → CloudFront
 resource "aws_route53_record" "www" {
-  count   = var.cloudfront_domain_name != "" ? 1 : 0
+  count = var.enable_cloudfront ? 1 : 0
   zone_id = aws_route53_zone.public.zone_id
   name    = "www.${var.domain_name}"
   type    = "A"
@@ -106,7 +116,7 @@ resource "aws_route53_record" "www" {
 
 # API → ALB (direct, bypassing CloudFront for WebSocket etc.)
 resource "aws_route53_record" "api" {
-  count   = var.alb_dns_name != "" ? 1 : 0
+  count = var.enable_alb ? 1 : 0
   zone_id = aws_route53_zone.public.zone_id
   name    = "api.${var.domain_name}"
   type    = "A"
@@ -145,7 +155,7 @@ resource "aws_route53_record" "redis" {
 
 # ─── Health Checks ──────────────────────────────────────────────────────────
 resource "aws_route53_health_check" "primary_alb" {
-  count = var.alb_dns_name != "" ? 1 : 0
+  count = var.enable_alb ? 1 : 0
 
   fqdn              = var.alb_dns_name
   port               = 443

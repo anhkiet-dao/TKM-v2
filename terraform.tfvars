@@ -78,14 +78,23 @@ ecs_app_config = {
 }
 
 # ─── Aurora PostgreSQL ───────────────────────────────────────────────────────
-aurora_config = {
-  engine_version  = "15.4"
-  instance_class  = "db.serverless"
-  instance_count  = 2
-  database_name   = "edubridge"
-  master_username = "edubridge_admin"
-  min_capacity    = 0.5
-  max_capacity    = 4.0
+# aurora_config = {
+#   engine_version  = "15.4"
+#   instance_class  = "db.serverless"
+#   instance_count  = 2
+#   database_name   = "edubridge"
+#   master_username = "edubridge_admin"
+#   min_capacity    = 0.5
+#   max_capacity    = 4.0
+# }
+
+# ─── RDS PostgreSQL ─────────────────────────────────────────────────────────
+rds_config = {
+  engine_version     = "15"
+  instance_class     = "db.t3.micro"
+  database_name      = "edubridge"
+  master_username    = "postgres"
+  allocated_storage  = 20
 }
 
 # ─── ElastiCache Redis ──────────────────────────────────────────────────────

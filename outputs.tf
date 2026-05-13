@@ -35,9 +35,12 @@ output "primary_ecs_cluster" {
 }
 
 # ─── Database ───────────────────────────────────────────────────────────────
-output "aurora_primary_endpoint" {
-  value     = module.database_primary.aurora_cluster_endpoint
-  sensitive = false
+# output "aurora_primary_endpoint" {
+#   value     = module.database_primary.aurora_cluster_endpoint
+#   sensitive = false
+# }
+output "db_endpoint" {
+  value = module.database_primary.db_endpoint
 }
 
 output "redis_endpoint" {

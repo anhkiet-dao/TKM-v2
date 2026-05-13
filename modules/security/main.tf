@@ -72,6 +72,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
   rule {
     id     = "archive-old-logs"
     status = "Enabled"
+    filter {}
 
     transition {
       days          = 90
@@ -185,9 +186,13 @@ resource "aws_cloudwatch_dashboard" "security" {
         height = 6
         properties = {
           title   = "GuardDuty Findings"
-          metrics = [
-            ["AWS/GuardDuty", "FindingsCount", "DetectorId", try(aws_guardduty_detector.this[0].id, ""), { "stat" : "Sum" }]
-          ]
+          metrics = var.enable_guardduty ? [
+            ["AWS/GuardDuty", "FindingsCount", "DetectorId", aws_guardduty_detector.this[0].id]
+          ] : []
+
+          # "${aws_guardduty_detector.this[0].id}"
+
+          stat = "Sum"
           view    = "timeSeries"
           stacked = false
           region  = data.aws_region.current.name
@@ -202,10 +207,14 @@ resource "aws_cloudwatch_dashboard" "security" {
         height = 6
         properties = {
           title   = "Security Hub Findings"
+          metrics = [
+            ["AWS/SecurityHub", "FindingsCount"]
+          ]
           view    = "timeSeries"
           stacked = false
           region  = data.aws_region.current.name
           period  = 3600
+          stat    = "Sum"
         }
       }
     ]

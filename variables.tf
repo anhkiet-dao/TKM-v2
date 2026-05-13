@@ -144,25 +144,43 @@ variable "ecs_app_config" {
 }
 
 # ─── Database ────────────────────────────────────────────────────────────────
-variable "aurora_config" {
-  description = "Aurora PostgreSQL configuration"
+# variable "aurora_config" {
+#   description = "Aurora PostgreSQL configuration"
+#   type = object({
+#     engine_version  = string
+#     instance_class  = string
+#     instance_count  = number
+#     database_name   = string
+#     master_username = string
+#     min_capacity    = number
+#     max_capacity    = number
+#   })
+#   default = {
+#     engine_version  = "15.4"
+#     instance_class  = "db.serverless"
+#     instance_count  = 2
+#     database_name   = "edubridge"
+#     master_username = "edubridge_admin"
+#     min_capacity    = 0.5
+#     max_capacity    = 4.0
+#   }
+# }
+variable "rds_config" {
+  description = "RDS PostgreSQL configuration"
   type = object({
-    engine_version  = string
-    instance_class  = string
-    instance_count  = number
-    database_name   = string
-    master_username = string
-    min_capacity    = number
-    max_capacity    = number
+    engine_version     = string
+    instance_class     = string
+    database_name      = string
+    master_username    = string
+    allocated_storage  = number
   })
+
   default = {
-    engine_version  = "15.4"
-    instance_class  = "db.serverless"
-    instance_count  = 2
-    database_name   = "edubridge"
-    master_username = "edubridge_admin"
-    min_capacity    = 0.5
-    max_capacity    = 4.0
+    engine_version     = "15"
+    instance_class     = "db.t3.micro"
+    database_name      = "edubridge"
+    master_username    = "postgres"
+    allocated_storage  = 20
   }
 }
 

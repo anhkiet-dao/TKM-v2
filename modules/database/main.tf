@@ -19,13 +19,13 @@ variable "private_subnet_ids" {
   type = list(string)
 }
 
-variable "aurora_config" {
+variable "rds_config" {
   type = object({
     engine_version  = string
     instance_class  = string
-    instance_count  = number
     database_name   = string
     master_username = string
+    allocated_storage = number
   })
 }
 
@@ -43,30 +43,18 @@ variable "allowed_security_group_ids" {
   default     = []
 }
 
-variable "is_global_primary" {
-  description = "Whether this is the primary cluster for Aurora Global"
-  type        = bool
-  default     = true
-}
-
-variable "global_cluster_identifier" {
-  description = "Aurora Global cluster identifier (for DR secondary)"
-  type        = string
-  default     = ""
-}
-
 variable "tags" {
   type    = map(string)
   default = {}
 }
 
 # ─── Subnet Groups ──────────────────────────────────────────────────────────
-resource "aws_db_subnet_group" "aurora" {
-  name       = "${var.project_name}-${var.environment}-aurora-subnet"
+resource "aws_db_subnet_group" "rds" {
+  name       = "${var.project_name}-${var.environment}-rds-subnet"
   subnet_ids = var.private_subnet_ids
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-${var.environment}-aurora-subnet"
+    Name = "${var.project_name}-${var.environment}-rds-subnet"
   })
 }
 
@@ -80,17 +68,18 @@ resource "aws_elasticache_subnet_group" "redis" {
 }
 
 # ─── Security Groups ────────────────────────────────────────────────────────
-resource "aws_security_group" "aurora" {
-  name_prefix = "${var.project_name}-aurora-"
+resource "aws_security_group" "rds" {
+  name_prefix = "${var.project_name}-rds-"
   vpc_id      = var.vpc_id
-  description = "Security group for Aurora PostgreSQL"
+  description = "Security group for rds PostgreSQL"
 
   ingress {
     description     = "PostgreSQL from allowed SGs"
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
-    security_groups = var.allowed_security_group_ids
+    # security_groups = var.allowed_security_group_ids
+    cidr_blocks = ["10.0.0.0/16"]
   }
 
   egress {
@@ -101,7 +90,7 @@ resource "aws_security_group" "aurora" {
   }
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-aurora-sg"
+    Name = "${var.project_name}-rds-sg"
   })
 
   lifecycle {
@@ -119,7 +108,8 @@ resource "aws_security_group" "redis" {
     from_port       = 6379
     to_port         = 6379
     protocol        = "tcp"
-    security_groups = var.allowed_security_group_ids
+    # security_groups = var.allowed_security_group_ids
+    cidr_blocks = ["10.0.0.0/16"]
   }
 
   egress {
@@ -138,104 +128,61 @@ resource "aws_security_group" "redis" {
   }
 }
 
-# ─── Aurora Global Database ─────────────────────────────────────────────────
-resource "aws_rds_global_cluster" "this" {
-  count = var.is_global_primary ? 1 : 0
+# ─── rds Global Database ─────────────────────────────────────────────────
+resource "aws_db_instance" "postgres" {
+  identifier = "${var.project_name}-${var.environment}-postgres"
 
-  global_cluster_identifier = "${var.project_name}-global-aurora"
-  engine                    = "aurora-postgresql"
-  engine_version            = var.aurora_config.engine_version
-  database_name             = var.aurora_config.database_name
-  storage_encrypted         = true
-}
+  engine         = "postgres"
+  engine_version = var.rds_config.engine_version
+  instance_class = var.rds_config.instance_class
 
-# ─── Aurora Cluster ──────────────────────────────────────────────────────────
-resource "aws_rds_cluster" "this" {
-  cluster_identifier = "${var.project_name}-${var.environment}-aurora"
-  engine             = "aurora-postgresql"
-  engine_version     = var.aurora_config.engine_version
+  allocated_storage = var.rds_config.allocated_storage
+  storage_type      = "gp3"
 
-  # Only set these for primary cluster
-  database_name   = var.is_global_primary ? var.aurora_config.database_name : null
-  master_username = var.is_global_primary ? var.aurora_config.master_username : null
-  master_password = var.is_global_primary ? random_password.aurora_master[0].result : null
+  db_name  = var.rds_config.database_name
+  username = var.rds_config.master_username
+  password = random_password.db_master.result
 
-  global_cluster_identifier = var.is_global_primary ? aws_rds_global_cluster.this[0].id : var.global_cluster_identifier
+  db_subnet_group_name   = aws_db_subnet_group.rds.name
+  vpc_security_group_ids = [aws_security_group.rds.id]
 
-  db_subnet_group_name   = aws_db_subnet_group.aurora.name
-  vpc_security_group_ids = [aws_security_group.aurora.id]
+  publicly_accessible = false
+  multi_az            = true
 
-  storage_encrypted = true
-  storage_type      = "aurora-iopt1"
-
-  backup_retention_period = 7
-  preferred_backup_window = "03:00-04:00"
-  skip_final_snapshot     = var.environment != "prod"
-  deletion_protection     = var.environment == "prod"
-
-  enabled_cloudwatch_logs_exports = ["postgresql"]
-
-  dynamic "serverlessv2_scaling_configuration" {
-    for_each = var.aurora_config.instance_class == "db.serverless" ? [1] : []
-    content {
-      max_capacity = var.aurora_config.max_capacity
-      min_capacity = var.aurora_config.min_capacity
-    }
-  }
-
-  tags = merge(var.tags, {
-    Name = "${var.project_name}-${var.environment}-aurora"
-    Role = var.is_global_primary ? "Primary-Writer" : "DR-Reader"
-  })
-
-  lifecycle {
-    ignore_changes = [master_password]
-  }
-}
-
-resource "random_password" "aurora_master" {
-  count   = var.is_global_primary ? 1 : 0
-  length  = 32
-  special = false
-}
-
-# Store master password in Secrets Manager
-resource "aws_secretsmanager_secret" "aurora_master" {
-  count = var.is_global_primary ? 1 : 0
-  name  = "${var.project_name}/${var.environment}/aurora-master-password"
-  tags  = var.tags
-}
-
-resource "aws_secretsmanager_secret_version" "aurora_master" {
-  count     = var.is_global_primary ? 1 : 0
-  secret_id = aws_secretsmanager_secret.aurora_master[0].id
-  secret_string = jsonencode({
-    username = var.aurora_config.master_username
-    password = random_password.aurora_master[0].result
-    host     = aws_rds_cluster.this.endpoint
-    port     = 5432
-    dbname   = var.aurora_config.database_name
-  })
-}
-
-# ─── Aurora Instances ────────────────────────────────────────────────────────
-resource "aws_rds_cluster_instance" "this" {
-  count = var.aurora_config.instance_count
-
-  identifier         = "${var.project_name}-${var.environment}-aurora-${count.index}"
-  cluster_identifier = aws_rds_cluster.this.id
-  instance_class     = var.aurora_config.instance_class
-  engine             = aws_rds_cluster.this.engine
-  engine_version     = aws_rds_cluster.this.engine_version
-
-  db_subnet_group_name = aws_db_subnet_group.aurora.name
+  backup_retention_period = 1
+  skip_final_snapshot     = true
 
   performance_insights_enabled = true
   monitoring_interval          = 60
   monitoring_role_arn          = aws_iam_role.rds_monitoring.arn
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-${var.environment}-aurora-${count.index}"
+    Name = "${var.project_name}-${var.environment}-postgres"
+  })
+
+  depends_on = [
+    aws_iam_role_policy_attachment.rds_monitoring
+  ]
+}
+
+resource "random_password" "db_master" {
+  length  = 32
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "db_master" {
+  name = "${var.project_name}/${var.environment}/postgres-credentials-v2"
+}
+
+resource "aws_secretsmanager_secret_version" "db_master" {
+  secret_id = aws_secretsmanager_secret.db_master.id
+
+  secret_string = jsonencode({
+    username = var.rds_config.master_username
+    password = random_password.db_master.result
+    host     = aws_db_instance.postgres.address
+    port     = 5432
+    dbname   = var.rds_config.database_name
   })
 }
 
@@ -312,20 +259,9 @@ resource "aws_secretsmanager_secret_version" "redis_auth" {
 }
 
 # ─── Outputs ─────────────────────────────────────────────────────────────────
-output "aurora_cluster_endpoint" {
-  value = aws_rds_cluster.this.endpoint
-}
-
-output "aurora_reader_endpoint" {
-  value = aws_rds_cluster.this.reader_endpoint
-}
-
-output "aurora_cluster_id" {
-  value = aws_rds_cluster.this.id
-}
 
 output "aurora_security_group_id" {
-  value = aws_security_group.aurora.id
+  value = aws_security_group.rds.id
 }
 
 output "redis_endpoint" {
@@ -336,6 +272,14 @@ output "redis_security_group_id" {
   value = aws_security_group.redis.id
 }
 
-output "global_cluster_identifier" {
-  value = var.is_global_primary ? aws_rds_global_cluster.this[0].id : var.global_cluster_identifier
+output "db_endpoint" {
+  value = aws_db_instance.postgres.address
+}
+
+output "db_port" {
+  value = aws_db_instance.postgres.port
+}
+
+output "db_id" {
+  value = aws_db_instance.postgres.id
 }

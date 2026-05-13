@@ -241,8 +241,9 @@ resource "aws_lb_listener" "https" {
 }
 
 resource "aws_lb_listener" "http_redirect" {
+  count             = var.acm_certificate_arn != "" ? 1 : 0
   load_balancer_arn = aws_lb.this.arn
-  port              = "80"
+  port              = 80
   protocol          = "HTTP"
 
   default_action {
@@ -252,6 +253,18 @@ resource "aws_lb_listener" "http_redirect" {
       protocol    = "HTTPS"
       status_code = "HTTP_301"
     }
+  }
+}
+
+resource "aws_lb_listener" "http_forward" {
+  count             = var.acm_certificate_arn == "" ? 1 : 0
+  load_balancer_arn = aws_lb.this.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.this.arn
   }
 }
 
@@ -325,7 +338,10 @@ resource "aws_ecs_service" "this" {
 
   tags = var.tags
 
-  depends_on = [aws_lb_listener.http_redirect]
+  depends_on = [
+    aws_lb_listener.http_redirect,
+    aws_lb_listener.http_forward
+  ]
 }
 
 # ─── Auto Scaling ────────────────────────────────────────────────────────────

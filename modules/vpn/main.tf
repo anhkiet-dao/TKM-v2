@@ -60,7 +60,7 @@ resource "tls_self_signed_cert" "ca" {
   private_key_pem = tls_private_key.ca.private_key_pem
 
   subject {
-    common_name  = "${var.project_name}-vpn-ca"
+    common_name  = "vpn.example.com"
     organization = "EduBridge Vietnam"
   }
 
